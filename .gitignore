@@ -31,9 +31,30 @@ vignettes/*.pdf
 *_cache/
 /cache/
 
+# RStudio files
+.Rproj.user/
+
+# Rendered reports
+analysis/*.html
+analysis/*.docx
+analysis/*.pdf
+docs/*.html
+docs/*.docx
+docs/*.pdf
+
+# output files
+output/
+
+# knitr and R markdown default cache directories
+/analysis/cache/
+/analysis/figures/
+
 # Temporary files created by R markdown
 *.utf8.md
 *.knit.md
 
 # R Environment Variables
 .Renviron
+
+# RStudio
+.Rproj.user
