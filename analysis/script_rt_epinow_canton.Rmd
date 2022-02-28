@@ -1,0 +1,278 @@
+---
+title: "Template"
+author: "Daniel Câmara"
+date: '`r Sys.Date()`'
+output:
+  html_document:
+    number_sections: yes
+    theme: yeti
+    toc: yes
+    toc_float: yes
+    df_print: paged
+editor_options: 
+  chunk_output_type: console
+---
+
+Code version: `r system("git log -1 --format=oneline | cut -d' ' -f1", intern = TRUE)`
+
+```{r knitr, include = FALSE}
+DOCNAME = "template"
+knitr::opts_chunk$set(autodep        = TRUE,
+                      cache          = TRUE,
+                      cache.path     = paste0("cache/", DOCNAME, "/"),
+                      cache.comments = TRUE,
+                      echo           = TRUE,
+                      error          = FALSE,
+                      fig.align      = "center",
+                      fig.path       = paste0("figures/", DOCNAME, "/"),
+                      fig.width      = 10,
+                      fig.height     = 8,
+                      message        = FALSE,
+                      warning        = FALSE)
+```
+
+```{r libaries, cache = FALSE}
+
+library(tidyverse)
+library(RPostgreSQL)
+library(dotenv)
+library(EpiNow2)
+library(EpiEstim)
+library(readxl)
+library(lubridate)
+library(janitor)
+library(linelist)
+
+```
+
+
+Introduction
+============
+
+This script aims to produce reliable Rt estimates, as well as new cases estimates. It uses the Swiss Federal Office of Public Health (FOPH) data that is stored in the EPIGRAPHHUB database. Thus, this script will import all epi data from the EpiGraphHub database, generate the estimates, and upload the results to the database.
+
+
+Connecting to the database and transferring data
+============
+
+Initially it is necessary to create a SSH tunnel to connect to the EpiGraphHub database. Once you have the permitions, type the following in your terminal:
+
+`ssh -f epigraph@epigraphhub.org -L 5432:localhost:5432 -NC`
+
+Then, pull the database connection data from the .env file in the root folder. Finally, make the connection.
+
+```{r}
+
+load_dot_env(file = "../.env")
+
+con <- dbConnect(
+  PostgreSQL(),
+  host = Sys.getenv("POSTGRES_HOST"),
+  port = Sys.getenv("POSTGRES_PORT"),
+  user = Sys.getenv("POSTGRES_USER"),
+  password = Sys.getenv("POSTGRES_PASSWORD"),
+  dbname = Sys.getenv("POSTGRES_DB")
+  )
+
+```
+
+
+Querying FOPH epi data from the EpiGraphHub database
+============
+
+Required data for the epinow estimates are just dates (daily) and number of cases. For regional estimates, a column with the region names should also be included
+
+```{r}
+df <- dbGetQuery(
+  con, 
+  # datum = date, geoRegion = cantons, entries = number of daily cases
+  "SELECT datum, \"geoRegion\", entries
+  FROM switzerland.foph_cases"
+  ) %>% 
+  # changing variable class from character to 'date'
+  mutate(datum = as.Date(datum)) %>% 
+  # renaming variables for ease of use
+  rename(date = datum,
+         confirm = entries,
+         region = geoRegion) %>% 
+  # converting to dplyr dataframe
+  as_tibble()
+
+```
+
+
+Some important definitions
+============
+
+If your dataset contains multiple regions and you want to make estimates for just a single region, you need to select one and filter your dataset. 
+
+
+```{r}
+
+# list of cantons in the dataset
+all_cantons <- df %>% 
+  select(region) %>% 
+  unique %>% 
+  pull
+
+print(all_cantons)
+
+my_canton <- all_cantons[1]
+
+```
+
+The next important definition is the interval from which the model will produce its estimates. The longer the period, the longer the model will take to produce the estimates.
+
+```{r}
+
+# Defining period of interest (default to last 14 days of data)
+my_interval <- 14
+
+# Period of analysis
+my_period <- max(df$date) - my_interval
+
+```
+
+Finally, it is important to define the prediction window that the model will estimate. The default value is 7 days. If no predition is desired, the value should be set to 0.
+
+```{r}
+
+my_horizon <- 7
+
+```
+
+
+
+Configuring model parameters
+============
+
+It is necessary to define the reporting_delay, generation_time and incubation_period. The [EpiNow documentation](https://cran.r-project.org/web/packages/EpiNow2/index.html) provides more information on each parameter.
+
+```{r}
+
+# Various delay/lag distributions as per the Covid-19 examples in the EpiNow2 documentation.
+reporting_delay <- estimate_delay(rlnorm(1000,  log(3), 1),
+                                  max_value = 15, 
+                                  bootstraps = 1)
+
+# Generation and incubation periods taken from literature as per the Covid-19 examples in the EpiNow2 documentation.
+generation_time <- get_generation_time(disease = "SARS-CoV-2", 
+                                       source = "ganyani")
+
+incubation_period <- get_incubation_period(disease = "SARS-CoV-2", 
+                                           source = "lauer")
+
+```
+
+
+Filtering dataframe for analysis
+============
+
+If you are interested in estimates for only one region, it is necessary to subset the dataset for the selected region `my_canton`. For both single region and regional analysis, however, it is necessary to subset the dataset for the defined period `my_period`.
+
+```{r}
+
+# Subsetting linelist to my_canton for individual analysis
+reported_cases_canton <- df %>%
+  # filtering region to maintain only my_canton and only for the defined period
+  filter(region == my_canton,
+         date >= my_period) %>%
+  # grouping cases by date, in case there are more than one entry per day
+  group_by(date) %>%
+  summarise(confirm = sum(confirm, na.rm = TRUE))
+
+# For regional analysis, data must be aggregated by day and canton
+reported_cases_regional <- df %>% 
+    # filtering regional dataset only for the defined period
+  filter(date >= my_period) %>% 
+  # grouping cases by date and canton
+  group_by(date, region) %>% 
+  summarise(confirm = sum(confirm, na.rm = TRUE))
+
+```
+
+
+Running EpiNow2 model
+============
+
+For the single region analysis, the `epinow()` function needs to be used. All definitions made earlier in the script will now be used. Since the estimation is done using [Stan](https://mc-stan.org/), this step might take a while.
+
+```{r}
+
+estimates <- epinow(reported_cases = reported_cases_canton,
+                    generation_time = generation_time,
+                    delays = delay_opts(incubation_period, reporting_delay),
+                    horizon = my_horizon,
+                    rt = rt_opts(prior = list(mean = 2, sd = 0.2)),
+                    verbose = TRUE)
+
+```
+
+For regional analysis, it is necessary to use the `regional_epinow()` function. As for the `epinow()` function, this analysis might take several minutes. Adjust your expectations accordingly.
+
+```{r}
+
+estimates_regional <- regional_epinow(reported_cases = reported_cases_regional, 
+                                      generation_time = generation_time,
+                                      delays = delay_opts(incubation_period, reporting_delay),
+                                      horizon = my_horizon,
+                                      rt = rt_opts(prior = list(mean = 2, sd = 0.2)),
+                                      verbose = TRUE)
+
+```
+
+
+Exporting results to the EpiGraphHub database
+============
+
+Only the regional results will be uploaded to the database, since it has the estimates for all the regions of the dataset. Table names follows the EpiGraphHub convention for naming tables.
+
+```{r}
+
+# Exporting Rt
+regional_rt <- estimates_regional$summary$summarised_measures$rt %>% 
+  as.data.frame()
+
+dbWriteTable(con, c(schema = 'switzerland', table = 'che_epinowrt_d_results'), value = regional_rt, overwrite = TRUE)
+
+# Exporting Growth Rate
+regional_growth_rate <- estimates_regional$summary$summarised_measures$growth_rate %>% 
+  as.data.frame()
+
+dbWriteTable(con, c(schema = 'switzerland', table = 'che_epinowgrowthrate_d_results'), value = regional_growth_rate, overwrite = TRUE)
+
+# Exporting Cases by Infection Date
+regional_cases_infection <- estimates_regional$summary$summarised_measures$cases_by_infection %>% 
+  as.data.frame()
+
+dbWriteTable(con, c(schema = 'switzerland', table = 'che_epinowcasesinfection_d_results'), value = regional_cases_infection, overwrite = TRUE)
+
+# Exporting Cases by Reporting Date
+regional_cases_report <- estimates_regional$summary$summarised_measures$cases_by_report %>% 
+  as.data.frame()
+
+dbWriteTable(con, c(schema = 'switzerland', table = 'che_epinowcasesreport_d_results'), value = regional_cases_report, overwrite = TRUE)
+
+```
+
+
+Session info
+============
+
+```{r session-info, cache = FALSE}
+
+devtools::session_info()
+
+```
+
+```{r cleanup-docs, cache = FALSE}
+
+doc.files <- c(list.files(pattern = "pdf"),
+               list.files(pattern = "html"),
+               list.files(pattern = "docx"))
+
+for (file in doc.files) {
+    file.rename(file, file.path("../docs", file))
+}
+
+```
