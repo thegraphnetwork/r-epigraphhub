@@ -55,7 +55,7 @@ This script aims to produce reliable Rt estimates, as well as new cases estimate
 Connecting to the database and transferring data
 ============
 
-Initially it is necessary to create a SSH tunnel to connect to the EpiGraphHub database. Once you have the permitions, type the following in your terminal:
+Initially it is necessary to create a SSH tunnel to connect to the EpiGraphHub database. Once you have the permissions, type the following in your terminal and enter your password:
 
 `ssh -f epigraph@epigraphhub.org -L 5432:localhost:5432 -NC`
 
@@ -65,7 +65,7 @@ Then, pull the database connection data from the .env file in the root folder. F
 
 load_dot_env(file = "../.env")
 
-con <- dbConnect(
+con <- RPostgreSQL::dbConnect(
   PostgreSQL(),
   host = Sys.getenv("POSTGRES_HOST"),
   port = Sys.getenv("POSTGRES_PORT"),

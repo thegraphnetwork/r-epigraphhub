@@ -58,3 +58,4 @@ output/
 
 # RStudio
 .Rproj.user
+.DS_Store
