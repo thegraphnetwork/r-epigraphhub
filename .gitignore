@@ -60,3 +60,6 @@ output/
 .Rproj.user
 .DS_Store
 .DS_Store
+analysis/teste.R
+analysis/connection_OLD.R
+analysis/script_rt_epinow_canton.Rmd
