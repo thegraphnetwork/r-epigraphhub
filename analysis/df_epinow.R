@@ -3,11 +3,6 @@
 
 # libraries used
 library(tidyverse)
-library(RPostgres)
-library(dotenv)
-
-# source for connection
-source(file = "connection.R")
 
 # function to prepare the user dataset to use inside epinow function
 df_epinow <- function(x, cases, date, region, period = 14, regional = FALSE){
