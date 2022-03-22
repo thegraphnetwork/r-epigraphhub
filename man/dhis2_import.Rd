@@ -40,7 +40,7 @@ A dataset containing all available data.
 }
 \section{Warning}{
 
-A Internet connection is needed to use this function.
+A Internet connection is needed to use this function. It might take a while depending on the connection.
 
 Watch out for hardcoded login and password.
 }

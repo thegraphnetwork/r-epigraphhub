@@ -30,6 +30,7 @@
 #' head(df_dhis2)
 #' }
 #' @import dplyr
+#' @import stringr
 #' @import httr
 #' @importFrom jsonlite fromJSON
 #' @importFrom readr cols
@@ -43,13 +44,6 @@ dhis2_import <- function(df,
                          year_initial,
                          year_final,
                          period = c("weekly", "monthly")){
-
-  # loading libraries
-  suppressPackageStartupMessages(library(httr))
-  suppressPackageStartupMessages(library(jsonlite))
-  suppressPackageStartupMessages(library(purrr))
-  suppressPackageStartupMessages(library(data.table))
-
   # defining dataset unique id ---------------------------------------------------------------------
   dataset_id <- rbind.data.frame(df)
   dataset_id <- dplyr::filter(dataset_id, (displayName %in% dataset))
@@ -150,7 +144,7 @@ dhis2_import <- function(df,
   ouID <- purrr::map(.x = ouID,
                      ~ paste(.x, collapse = ";"))
 
-    # building the url -------------------------------------------------------------------------------
+  # building the url -------------------------------------------------------------------------------
   urlA <- paste0(api_url, "analytics.csv?")
   urlB <- paste0("dimension=pe:",
                  # defining period of the query
@@ -184,6 +178,64 @@ dhis2_import <- function(df,
   )
 
   df2 <- data.table::rbindlist(df2)
-  df2 <- as_tibble(df2)
+  df2 <- dplyr::as_tibble(df2)
+
+  # searching for error E7115 ----------------------------------------------------------------------
+  # this errors refers to variables that can't be aggregated. So we will identify and remove them
+  error_message <- if_else(is.na(stringr::str_extract(names(df2), "errorCode:E7115")),
+                           "No error",
+                           "errorCode:E7115")
+  error_message <- if_else(any(error_message == "errorCode:E7115"),
+                           "errorCode:E7115",
+                           "No error")
+
+  # testing for error
+  if (error_message == "No error"){
+    message("No errorCode:E7115 found. Whole dataset being retrieved")
+    return(df2)
+  } else {
+    # Detecting variables that are producing the error E7115 and removing them ---------------------
+    # extracting message
+    vars_remove1 <- paste(names(df2), collapse = ",")
+    # detecting the string pattern that contains variables
+    vars_remove2 <- stringr::str_locate_all(vars_remove1, "\\[|\\]\\`") # "\\`(?=\\[)|(?=\\])"
+    # cutting around special characters that contains variables
+    vars_remove3 <- stringr::str_sub(vars_remove1, vars_remove2[[1]][1], vars_remove2[[1]][2])
+    # isolating variables
+    vars_remove4 <- stringr::str_remove_all(vars_remove3, "\\[|\\]|\\s")
+    # pulling variables to remove them from the variables
+    vars_remove5 <- stringr::str_split(vars_remove4, pattern = ",")
+    vars_remove6 <- unlist(vars_remove5)
+    vars_remove7 <- paste(vars_remove6, collapse = "|")
+    # updating varID_new object removing the problematic variables
+    varID_new <- stringr::str_remove_all(varID, vars_remove7)
+    varID_new <- stringr::str_replace_all(varID_new, pattern = ";;", replacement = ";")
+
+    # looping again --------------------------------------------------------------------------------
+    df3 <- purrr::map2(varID_new, ouID, function(x, y){
+      url <- URLencode(paste(paste0(urlA,
+                                    urlB),
+                             paste0("dimension=dx:", x),
+                             paste0("dimension=ou:", y),
+                             urlC,
+                             sep="&"))
+      r <- httr::GET(url,
+                     httr::authenticate(user = username,
+                                        password = password),
+                     httr::timeout(1000))
+      r <- httr::content(r,
+                         type = "text/csv",
+                         show_col_types = FALSE,
+                         col_types = readr::cols(.default = "c"),
+                         encoding = "latin1")
+    }
+    )
+
+    # returning updated dataframe
+    df3 <- data.table::rbindlist(df3)
+    df3 <- dplyr::as_tibble(df3)
+    message(paste0("errorCode:E7115 found. Retrieving dataset without the following variables: ", vars_remove4))
+    return(df3)
+  }
 
 }
