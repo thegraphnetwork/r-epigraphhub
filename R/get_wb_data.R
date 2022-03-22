@@ -8,7 +8,7 @@
 #'
 #' @section Warning:
 #' An internet connection is needed to use this function.
-#' 
+#'
 #' @examples \dontrun{
 #' library("r-epigraphhub")
 #' datasets <- wb_data()
@@ -18,15 +18,15 @@
 #' my_dataset <- "Environment, Social and Governance (ESG) Data"
 #' my_data <- get_wb_data(my_dataset)
 #' }
+#' @importFrom dplyr `%>%` as_tibble select
+#' @import WDI
 #' @export
 
 get_wb_data <- function(datasets, start_year = 1960, end_year = 2022){
-  require(dplyr)
-  require(WDI)
-  
+
   if (start_year < 1960) stop("Minimum year must be 1960.")
   if (end_year < start_year) stop("Ending year should be equal or higher than the starting year.")
-  
+
   # retrieving list of datasets
   if (is.list(datasets)){
     dataset_names <- names(datasets)
@@ -35,8 +35,8 @@ get_wb_data <- function(datasets, start_year = 1960, end_year = 2022){
   }
   # querying indicators
   df_WDI <- WDI_data$series %>%
-    as_tibble() %>%
-    select(sourceDatabase, indicator)
+    dplyr::as_tibble() %>%
+    dplyr::select(sourceDatabase, indicator)
   dataset_list <- list()
   # looping through the API and get the required datasets
   for (i in 1:length(datasets)){
