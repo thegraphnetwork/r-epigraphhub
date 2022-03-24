@@ -125,22 +125,38 @@ dhis2_import <- function(df,
   d_ou <- jsonlite::fromJSON(r_ou, flatten=TRUE)
 
   # pulling and organizing dataElements unique id
-  varID <- split(d_var$dataSetElements$dataElement.id,
-                 # to avoid fatal curl HTTP/2 error, queries should be limited to 500 objects at a time
-                 ceiling(seq_along(d_var$dataSetElements$dataElement.id)/500))
-  # looping through each batch of 500 objects and creating different query structures
-  varID <- purrr::map(.x = varID,
-                      ~ paste(.x, collapse = ";"))
+  if (exists(x = "dataElement.id", where = d_var$dataSetElements)) {
+    message("There is a valid list of dataElements. Retrieving...")
+    varID <- split(d_var$dataSetElements$dataElement.id,
+                   # to avoid fatal curl HTTP/2 error, queries should be limited to 400 objects at a time
+                   ceiling(seq_along(d_var$dataSetElements$dataElement.id)/400))
+    # looping through each batch of 400 objects and creating different query structures
+    varID <- purrr::map(.x = varID,
+                        ~ paste(.x, collapse = ";"))
+  } else {
+    message("No dataElements were found in the dataset.")
+    varID <- ""
+  }
 
   # pulling and organizing indicators unique id
-  indID <- split(d_ind$id,
-                 ceiling(seq_along(d_ind$id)/500))
-  indID <- purrr::map(.x = indID,
-                      ~ paste(.x, collapse = ";"))
+  if (exists(x = "id", where = d_ind$indicators)) {
+    message("There is a valid list of indicators. Retrieving...")
+    indID <- split(d_ind$indicators$id,
+                   ceiling(seq_along(d_ind$indicators$id)/400))
+    indID <- purrr::map(.x = indID,
+                        ~ paste(.x, collapse = ";"))
+  } else {
+    message("No indicators were found in the dataset.")
+    indID <- ""
+  }
+
+  if (varID == "" & indID == ""){
+    stop("Neither dataElements nor indicators were found. Aborting...")
+  }
 
   # pulling and organizing organisationUnits unique id
   ouID <- split(d_ou$organisationUnits$id,
-                ceiling(seq_along(d_ou$organisationUnits$id)/500))
+                ceiling(seq_along(d_ou$organisationUnits$id)/400))
   ouID <- purrr::map(.x = ouID,
                      ~ paste(.x, collapse = ";"))
 
@@ -155,12 +171,18 @@ dhis2_import <- function(df,
   urlC <- "rows=ou%3Bpe&columns=dx&completedOnly=false&displayProperty=NAME&skipMeta=false"
 
   # looping through the DHIS2 platform and pulling data --------------------------------------------
-  df2 <- purrr::map2(varID, ouID, function(x, y){
+  df2 <- purrr::pmap(list(x = varID, y = indID, z = ouID), function(x, y, z){
     # urls for importing data
     url <- URLencode(paste(paste0(urlA,
                                   urlB),
-                           paste0("dimension=dx:", x),
-                           paste0("dimension=ou:", y),
+                           # testing to see if there is an indicator list
+                           dplyr::if_else(
+                             y == "",
+                             paste0("dimension=dx:", x),
+                             paste0("dimension=dx:", x, ";", y)
+                           ),
+                           # paste0("dimension=dx:", y),
+                           paste0("dimension=ou:", z),
                            urlC,
                            sep="&"))
     # pulling the data
@@ -191,7 +213,7 @@ dhis2_import <- function(df,
 
   # testing for error
   if (error_message == "No error"){
-    message("No errorCode:E7115 found. Whole dataset being retrieved")
+    message("No errorCode:E7115 found.")
     return(df2)
   } else {
     # Detecting variables that are producing the error E7115 and removing them ---------------------
@@ -212,17 +234,26 @@ dhis2_import <- function(df,
     varID_new <- stringr::str_replace_all(varID_new, pattern = ";;", replacement = ";")
 
     # looping again --------------------------------------------------------------------------------
-    df3 <- purrr::map2(varID_new, ouID, function(x, y){
+    df3 <- purrr::pmap(list(x = varID_new, y = indID, z = ouID), function(x, y, z){
+      # urls for importing data
       url <- URLencode(paste(paste0(urlA,
                                     urlB),
-                             paste0("dimension=dx:", x),
-                             paste0("dimension=ou:", y),
+                             # testing to see if there is an indicator list
+                             dplyr::if_else(
+                               y == "",
+                               paste0("dimension=dx:", x),
+                               paste0("dimension=dx:", x, ";", y)
+                             ),
+                             # paste0("dimension=dx:", y),
+                             paste0("dimension=ou:", z),
                              urlC,
                              sep="&"))
+      # pulling the data
       r <- httr::GET(url,
                      httr::authenticate(user = username,
                                         password = password),
                      httr::timeout(1000))
+      # converting into a csv structure
       r <- httr::content(r,
                          type = "text/csv",
                          show_col_types = FALSE,
