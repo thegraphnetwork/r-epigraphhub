@@ -12,7 +12,7 @@
 #' @param regional logical. Does the user wants the dataset to be aggregated by regions?
 #'
 #' @examples \dontrun{
-#' library("r-epigraphhub")
+#' library("epigraphhub")
 #' con <- egh_connection(auto_connect = TRUE, use_env = TRUE, path_env = ".env")
 #' df_canton <- dbGetQuery(con, "SELECT datum, \"geoRegion\", entries FROM switzerland.foph_cases")
 #' df <- df_epinow(df_canton, cases = "entries", date = "datum", regions = "geoRegion", regional = TRUE, period = 28)
