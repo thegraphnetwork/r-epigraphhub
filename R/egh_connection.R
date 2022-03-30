@@ -7,7 +7,6 @@
 #' @param auto_connect logical. Should the function use a default connection? Automatically calls the session terminal and makes the connection.
 #' @param use_env logical. Should the function use the parameters configured in a local .env file?
 #' @param path_env character. If use_env = TRUE, the user should provide a path to the local .env file.
-#' @param information_system string. The abbreviation of the health information system to be accessed. See \emph{Details}.
 #' @param user,password if use_env = FALSE, please provide access parameters to the EpiGraphHub database.
 #'
 #' @section Warning:
@@ -18,15 +17,17 @@
 #' @examples \dontrun{
 #' egh_connection(auto_connect = TRUE, use_env = TRUE, path_env = "../.env")
 #'
-#' egh_connection(auto_connect = TRUE, use_env = FALSE, user_db = "user", password_db = "password")
+#' egh_connection(auto_connect = TRUE, use_env = FALSE, user = "user", password = "password")
 #' }
+#' @import dotenv
+#' @import RPostgres
 #' @export
 
 egh_connection <- function(auto_connect = TRUE,
                            use_env = TRUE,
                            path_env = "../.env",
-                           user_db,
-                           password_db){
+                           user,
+                           password){
 
   if (auto_connect == TRUE){
     system2("ssh", c("epigraph@epigraphhub.org -L 5432:localhost:5432", "-NC"), wait = FALSE)
@@ -34,11 +35,8 @@ egh_connection <- function(auto_connect = TRUE,
 
     if (use_env == TRUE){
       # load .env file in the root folder (using the example in the EpiGraphHub)
-      library(dotenv)
       load_dot_env(path_env)
 
-      # loading the library
-      library(RPostgres)
       # making the connection to the database
       con <- RPostgres::dbConnect(
         drv = RPostgres::Postgres(),
@@ -51,15 +49,13 @@ egh_connection <- function(auto_connect = TRUE,
       )
     } else if (use_env == FALSE){
 
-      # loading the library
-      library(RPostgres)
       # making the connection to the database using the user and password
       con <- RPostgres::dbConnect(
         RPostgres::Postgres(),
         host = "localhost",
         port = "5432",
-        user = user_db,
-        password = password_db,
+        user = user,
+        password = password,
         dbname = "epigraphhub"
       )
     }
