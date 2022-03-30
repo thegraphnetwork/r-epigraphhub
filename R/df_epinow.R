@@ -16,48 +16,49 @@
 #' con <- egh_connection(auto_connect = TRUE, use_env = TRUE, path_env = ".env")
 #' df_canton <- dbGetQuery(con, "SELECT datum, \"geoRegion\", entries FROM switzerland.foph_cases")
 #' df <- df_epinow(df_canton, cases = "entries", date = "datum", regions = "geoRegion", regional = TRUE, period = 28)
-#' #' egh_connection(auto_connect = TRUE, use_env = FALSE, user_db = "user", password_db = "password")
 #' }
+#' @import dplyr
+#' @importFrom rlang enquo
 #' @export
 
 df_epinow <- function(x, cases, date, regions, period = 14, regional = FALSE){
 
-  require(dplyr)
-
+  if (missing(x)) stop("Dataset not provided.")
   if (missing(cases)) stop("Vector of cases not provided.")
   if (missing(date)) stop("Vector of dates not provided.")
+  # if (regional == TRUE & missing(regions)) stop("Vector of regions not provided.")
 
-  cases <- enquo(cases)
-  date <- enquo(date)
+  cases <- rlang::enquo(cases)
+  date <- rlang::enquo(date)
 
   if (regional == FALSE){
     x %>%
-      rename(date = !!date,
+      dplyr::rename(date = !!date,
              confirm = !!cases) %>%
-      mutate(date = as.Date(date)) %>%
-      select(date, confirm) %>%
-      filter(date >= (max(date) - period)) %>%
-      group_by(date) %>%
-      summarise(confirm = sum(confirm, na.rm = TRUE)) %>%
-      arrange(date) %>%
-      as_tibble()
+      dplyr::mutate(date = as.Date(date)) %>%
+      dplyr::select(date, confirm) %>%
+      dplyr::filter(date >= (max(date) - period)) %>%
+      dplyr::group_by(date) %>%
+      dplyr::summarise(confirm = sum(confirm, na.rm = TRUE)) %>%
+      dplyr::arrange(date) %>%
+      dplyr::as_tibble()
   } else if (regional == TRUE){
 
     if (missing(regions)) stop("Vector of regions not provided.")
 
-    regions <- enquo(regions)
+    regions <- rlang::enquo(regions)
 
     x %>%
-      rename(date = !!date,
+      dplyr::rename(date = !!date,
              confirm = !!cases,
              regions = !!regions) %>%
-      mutate(date = as.Date(date)) %>%
-      select(date, confirm, regions) %>%
-      filter(date >= (max(date) - period)) %>%
-      group_by(date, regions) %>%
-      summarise(confirm = sum(confirm, na.rm = TRUE)) %>%
-      arrange(date, regions) %>%
-      as_tibble()
+      dplyr::mutate(date = as.Date(date)) %>%
+      dplyr::select(date, confirm, regions) %>%
+      dplyr::filter(date >= (max(date) - period)) %>%
+      dplyr::group_by(date, regions) %>%
+      dplyr::summarise(confirm = sum(confirm, na.rm = TRUE)) %>%
+      dplyr::arrange(date, regions) %>%
+      dplyr::as_tibble()
   }
 }
 
