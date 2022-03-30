@@ -2,3 +2,5 @@
 
 export(df_epinow)
 export(egh_connection)
+import(dplyr)
+importFrom(rlang,enquo)
