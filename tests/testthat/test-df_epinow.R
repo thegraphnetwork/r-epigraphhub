@@ -13,7 +13,7 @@ testthat::test_that("errors", {
     "Vector of cases not provided."
   )
   testthat::expect_error(
-    df_epinow(x = df, cases = casesx, regional = FALSE),
+    df_epinow(x = df, cases = cases, regional = FALSE),
     "Vector of dates not provided."
   )
   testthat::expect_error(
