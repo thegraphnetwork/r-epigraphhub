@@ -34,7 +34,7 @@ egh_connection <- function(auto_connect = TRUE,
 
     if (use_env == TRUE){
       # load .env file in the root folder (using the example in the EpiGraphHub)
-      load_dot_env(path_env)
+      dotenv::load_dot_env(path_env)
 
       # making the connection to the database
       con <- RPostgres::dbConnect(
