@@ -27,10 +27,9 @@ This function loads a \code{data.frame} object and makes some manipulation of it
 }
 \examples{
 \dontrun{
-library("r-epigraphhub")
+library("epigraphhub")
 con <- egh_connection(auto_connect = TRUE, use_env = TRUE, path_env = ".env")
 df_canton <- dbGetQuery(con, "SELECT datum, \"geoRegion\", entries FROM switzerland.foph_cases")
 df <- df_epinow(df_canton, cases = "entries", date = "datum", regions = "geoRegion", regional = TRUE, period = 28)
-#' egh_connection(auto_connect = TRUE, use_env = FALSE, user_db = "user", password_db = "password")
 }
 }
