@@ -2,3 +2,10 @@
 
 export(df_epinow)
 export(egh_connection)
+export(get_wb_data)
+export(wb_data)
+import(WDI)
+importFrom(dplyr,`%>%`)
+importFrom(dplyr,as_tibble)
+importFrom(dplyr,filter)
+importFrom(dplyr,select)
