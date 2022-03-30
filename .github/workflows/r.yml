@@ -27,6 +27,8 @@ jobs:
         uses: r-lib/actions/setup-r@f57f1301a053485946083d7a45022b278929a78a
         with:
           r-version: ${{ matrix.r-version }}
+          extra-packages: |
+            any::rcmdcheck
       - name: Install dependencies
         run: |
           install.packages(c("remotes", "rcmdcheck"))
