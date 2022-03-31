@@ -6,7 +6,7 @@ testthat::test_that("errors", {
   endDate = "2022-02-01"
   id_col = "NAME_2"
 
-  con <- egh_connection(auto_connect = TRUE, use_env = TRUE, path_env = "./.env")
+  con <- egh_connection(auto_connect = TRUE, use_env = FALSE, user = "epigraph", password = "epigraph")
   x <- sf::st_read(con,
                     geometry_column = "geometry",
                     query = paste0("SELECT * FROM public.", "\"AFG_2\""),

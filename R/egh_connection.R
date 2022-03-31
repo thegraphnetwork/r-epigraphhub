@@ -15,7 +15,7 @@
 #' Watch out for hardcoded login and password.
 #'
 #' @examples \dontrun{
-#' egh_connection(auto_connect = TRUE, use_env = TRUE, path_env = "./.env")
+#' egh_connection(auto_connect = TRUE, use_env = TRUE, path_env = ".env")
 #' egh_connection(auto_connect = TRUE, use_env = FALSE, user = "user", password = "password")
 #' }
 #' @import dotenv
@@ -24,7 +24,7 @@
 
 egh_connection <- function(auto_connect = TRUE,
                            use_env = TRUE,
-                           path_env = "../.env",
+                           path_env = ".env",
                            user,
                            password){
 

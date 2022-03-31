@@ -37,6 +37,7 @@
 #' @import rgee
 #' @import dplyr
 #' @import sf
+#' @import geojsonio
 #' @importFrom raster extent
 #' @importFrom tidyr pivot_longer
 #' @importFrom tidyselect peek_vars
