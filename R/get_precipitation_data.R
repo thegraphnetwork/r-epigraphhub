@@ -27,7 +27,7 @@
 #' startDate = "2021-01-01"
 #' endDate = "2022-01-11"
 #' id_col = "NAME_1"
-#' con <- egh_connection(auto_connect = TRUE, use_env = TRUE, path_env = "./.env")
+#' con <- egh_connection(auto_connect = TRUE, use_env = TRUE, path_env = ".env")
 #' df <- get_precipitation_data(x = con,
 #'                              country = country,
 #'                              admin_lvl = admin_lvl,
