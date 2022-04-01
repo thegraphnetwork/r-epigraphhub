@@ -8,8 +8,8 @@ egh_connection(
   auto_connect = TRUE,
   use_env = TRUE,
   path_env = "../.env",
-  user_db,
-  password_db
+  user,
+  password
 )
 }
 \arguments{
@@ -18,8 +18,6 @@ egh_connection(
 \item{use_env}{logical. Should the function use the parameters configured in a local .env file?}
 
 \item{path_env}{character. If use_env = TRUE, the user should provide a path to the local .env file.}
-
-\item{information_system}{string. The abbreviation of the health information system to be accessed. See \emph{Details}.}
 
 \item{user, password}{if use_env = FALSE, please provide access parameters to the EpiGraphHub database.}
 }
@@ -38,8 +36,7 @@ Watch out for hardcoded login and password.
 
 \examples{
 \dontrun{
-egh_connection(auto_connect = TRUE, use_env = TRUE, path_env = "../.env")
-
-egh_connection(auto_connect = TRUE, use_env = FALSE, user_db = "user", password_db = "password")
+egh_connection(auto_connect = TRUE, use_env = TRUE, path_env = "./.env")
+egh_connection(auto_connect = TRUE, use_env = FALSE, user = "user", password = "password")
 }
 }
