@@ -7,7 +7,7 @@ Authors@R:
 Description: This package hosts several useful functions and tools for epidemiological data analysis, as well as connection procedures to the EpiGraphHub data repository. It has functions to allow users to automatically connect and download datasets hosted in free epidemiological apps, such as DHIS2 and KoboToolbox. It also has various functions to help users download data hosted in several databases, such as WHO, World Bank, among others.
 License: `use_mit_license()`, `use_gpl3_license()` or friends to pick a
     license
-Imports: RPostgres, dotenv, dplyr, rlang, WDI
+Imports: RPostgres, WDI, dplyr, rlang, httr, jsonlite, readr, stringr, dotenv
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.1.2
