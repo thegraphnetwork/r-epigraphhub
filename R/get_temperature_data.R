@@ -1,10 +1,9 @@
-#' Wrapper function to download daily precipitation data from Google Earth to use on epi analysis
+#' Wrapper function to download daily temperature data from Google Earth to use on epi analysis
 #'
-#' \code{get_precipitation_data} connects to the EpiGraphHub database to pull an spatial polygon from a country and an specific administrative level. Then, it connects to the Google Earth Engine database to pull a dataframe containing daily precipitation data for the study area. This function pulls data from CHIRPS (Rainfall Estimates from Rain Gauge and Satellite Observations) using the rgee package..
+#' \code{get_temperature_data} connects to the EpiGraphHub database to pull an spatial polygon from a country and an specific administrative level. Then, it connects to the Google Earth Engine database to pull a dataframe containing daily temperature data for the study area. This function pulls data from MODIS daily Land-Surface Temperature (LST) at 1km grids using the rgee package (MOD11A1 V6.1 product).
 #'
-#' To read more about CHIRPS:
-#' #' https://www.chc.ucsb.edu/data/chirps
-#' https://www.nature.com/articles/sdata201566
+#' To read more about MOD11A1 V6.1 product:
+#' https://lpdaac.usgs.gov/products/mod11a1v061/
 #'
 #' To read more about R Google Earth Engine
 #' https://cran.r-project.org/web/packages/rgee/
@@ -28,11 +27,11 @@
 #' startDate = "2021-01-01"
 #' endDate = "2022-01-01"
 #' con <- egh_connection(auto_connect = TRUE, use_env = TRUE, path_env = ".env")
-#' df <- get_precipitation_data(x = con,
-#'                              country = country,
-#'                              admin_lvl = admin_lvl,
-#'                              startDate = startDate,
-#'                              endDate = endDate)
+#' df <- get_temperature_data(x = con,
+#'                            country = country,
+#'                            admin_lvl = admin_lvl,
+#'                            startDate = startDate,
+#'                            endDate = endDate)
 #' }
 #' @import rgee
 #' @import dplyr
@@ -43,12 +42,12 @@
 #' @importFrom tidyselect peek_vars
 #' @export
 
-get_precipitation_data <- function(x,
-                                   id_col = NULL,
-                                   country = NULL,
-                                   admin_lvl = NULL,
-                                   startDate,
-                                   endDate){
+get_temperature_data <- function(x,
+                                 id_col = NULL,
+                                 country = NULL,
+                                 admin_lvl = NULL,
+                                 startDate,
+                                 endDate){
 
   if (missing(x)) stop("Please, provide an egh_connect() or a sf object.")
   if (missing(startDate)) stop("Dates not provided.")
@@ -104,28 +103,53 @@ get_precipitation_data <- function(x,
   # calculating the total number of days in the period
   nDays = ee$Number(endDate$difference(startDate,"day"))$round()
 
-  # filtering daily precipitation data from CHIRPS
-  prec_data <- ee$ImageCollection("UCSB-CHG/CHIRPS/DAILY") %>%
+  # filtering daily temperature data from MODIS LST day and night
+  temp_data_day <- ee$ImageCollection("MODIS/006/MOD11A1") %>%
     ee$ImageCollection$filterBounds(boundary_limits) %>%
-    ee$ImageCollection$map(function(x) x$select("precipitation"))
+    ee$ImageCollection$map(function(x) x$select("LST_Day_1km"))
 
-  # mapping precipitation for the time period
-  prec_collection = ee$ImageCollection(
+  temp_data_night <- ee$ImageCollection("MODIS/006/MOD11A1") %>%
+    ee$ImageCollection$filterBounds(boundary_limits) %>%
+    ee$ImageCollection$map(function(x) x$select("LST_Night_1km"))
+
+  # mapping day temperature for the time period
+  temp_data_day_collection = ee$ImageCollection(
     ee$List$sequence(1, nDays)$map(ee_utils_pyfunc(function(n){
-      ini <- startDate$advance(n, "day")
-      end <- ini$advance(1, "day")
-      return(prec_data$filterDate(ini, end)$
-               select(0)$sum()$
+      ini <- startDate$advance(n, "days")
+      end <- ini$advance(1,"days")
+      return(temp_data_day$filterDate(ini, end)$
+               select(0)$mean()$
+               multiply(0.02)$
+               subtract(273.15)$
+               set("system:time_start", ini))
+    })))
+
+  temp_data_night_collection = ee$ImageCollection(
+    # funcao em Python para mapear todos os meses do periodo
+    ee$List$sequence(1, nDays)$map(ee_utils_pyfunc(function(n){
+      # calculando o offset da data de inicio
+      ini <- startDate$advance(n, "days")
+      # avancar um mes
+      end <- ini$advance(1,"days")
+      # filtrando para cada data no periodo, extraindo a media mensal, e convertendo de Kelvins para Celsius
+      return(temp_data_night$filterDate(ini, end)$
+               select(0)$mean()$
+               multiply(0.02)$
+               subtract(273.15)$
                set("system:time_start", ini))
     })))
 
   # extracting data for each spatial unit in df_spatial
-  df_prec <- ee_extract(x = prec_collection,
-                        y = df_spatial[id_col],
-                        sf = FALSE)
+  df_temp_day <- ee_extract(x = temp_data_day_collection,
+                            y = df_spatial[id_col],
+                            sf = FALSE)
+
+  df_temp_night <- ee_extract(x = temp_data_night_collection,
+                              y = df_spatial[id_col],
+                              sf = FALSE)
 
   # extracting starting and ending dates of the dataset and constructing a sequence
-  date_temp <- prec_data$filterDate(start = startDate$args$value, opt_end = endDate$args$value)
+  date_temp <- temp_data_day$filterDate(start = startDate$args$value, opt_end = endDate$args$value)
   date_temp <- ee_get_date_ic(date_temp)
   date_seq <- seq.Date(min(as.Date(date_temp$time_start)),
                        max(as.Date(date_temp$time_start)),
@@ -138,20 +162,35 @@ get_precipitation_data <- function(x,
   df_dates <- data.frame(date = date_seq) %>%
     dplyr::mutate(date_temp = seq(length(date_seq)) - 1)
 
-  # returning a dataframe with all precipitation data
-  df_final <- df_prec %>%
+  # returning a dataframe with all day and night temperature data
+  df_final_day <- df_temp_day %>%
     tidyr::pivot_longer(
-      cols = dplyr::ends_with("precipitation"),
+      cols = dplyr::ends_with("LST_Day_1km"),
       names_to = "date_temp",
-      values_to = "precipitation"
+      values_to = "LST_Day_1km"
     ) %>%
     dplyr::mutate(
       date_temp = stringr::str_remove_all(date_temp,
-                                          "X|_precipitation"),
+                                          "X|_LST_Day_1km"),
       date_temp = as.numeric(date_temp)
+    )
+
+  df_final_night <- df_temp_night %>%
+    tidyr::pivot_longer(
+      cols = dplyr::ends_with("LST_Night_1km"),
+      names_to = "date_temp",
+      values_to = "LST_Night_1km"
     ) %>%
+    dplyr::mutate(
+      date_temp = stringr::str_remove_all(date_temp,
+                                          "X|_LST_Night_1km"),
+      date_temp = as.numeric(date_temp)
+    )
+
+  df_final <- df_final_day %>%
+    dplyr::left_join(df_final_night) %>%
     dplyr::left_join(df_dates) %>%
-    dplyr::relocate(date, .before = precipitation) %>%
+    dplyr::relocate(date, .before = LST_Day_1km) %>%
     dplyr::select(-date_temp) %>%
     dplyr::arrange(id_col, date)
 
