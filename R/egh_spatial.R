@@ -11,6 +11,8 @@
 #' @param area the variable in x that contains the vector of names of the polygons.
 #' @param outcome the outcome variable that is included in x to be analyzed.
 #'
+#' Thanks to https://github.com/walkerke for the inspiration and published code on how to highlight neighbours.
+#'
 #' @section Warning:
 #' Calculations might take a while in slower computers. When exploring the different spatial contiguity functions, the higher the number of neighbours and distance the slower the computation time can become.
 #'
